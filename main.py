@@ -14,6 +14,7 @@ load_dotenv()
 # Import our new services
 from database import init_database, close_database
 from embedding_service import init_embedding_service
+from schema import initialize_em_tools_schema
 
 # Configure logging
 logging.basicConfig(
@@ -31,7 +32,11 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize database connection
         init_database()
-        logger.info("Neo4j database initialized")
+        logger.info("Neo4j database connected")
+        
+        # Initialize EM Tools schema
+        initialize_em_tools_schema()
+        logger.info("EM Tools schema initialized")
         
         # Initialize embedding service (this may take a while on first run)
         init_embedding_service()

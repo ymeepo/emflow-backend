@@ -1,4 +1,4 @@
-# Embedding service using Qwen3-Embedding-0.6B model for semantic search.
+""" Embedding service using Qwen3-Embedding-0.6B model for semantic search. """
 
 import os
 import logging
