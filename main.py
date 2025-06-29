@@ -3,8 +3,57 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import json
+import os
+import logging
+from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 
-app = FastAPI(title="State Storage API")
+# Load environment variables from .env file
+load_dotenv()
+
+# Import our new services
+from database import init_database, close_database
+from embedding_service import init_embedding_service
+
+# Configure logging
+logging.basicConfig(
+    level=os.getenv('LOG_LEVEL', 'INFO'),
+    format=os.getenv('LOG_FORMAT', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager for startup and shutdown events."""
+    # Startup
+    logger.info("Starting EM Tools Backend...")
+    try:
+        # Initialize database connection
+        init_database()
+        logger.info("Neo4j database initialized")
+        
+        # Initialize embedding service (this may take a while on first run)
+        init_embedding_service()
+        logger.info("Embedding service initialized")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down EM Tools Backend...")
+    close_database()
+
+
+app = FastAPI(
+    title="EM Tools Backend API",
+    description="Backend API for EM Tools enterprise management dashboard with Neo4j knowledge graph and semantic search",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -39,7 +88,54 @@ class FunnelData(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"message": "State Storage API"}
+    return {
+        "message": "EM Tools Backend API",
+        "version": "1.0.0",
+        "features": ["State Storage", "Neo4j Knowledge Graph", "Semantic Search"],
+        "endpoints": {
+            "docs": "/docs",
+            "redoc": "/redoc",
+            "health": "/health"
+        }
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring."""
+    try:
+        from database import get_neo4j_connection
+        from embedding_service import get_embedding_service
+        
+        # Test Neo4j connection
+        neo4j_status = "connected"
+        try:
+            db = get_neo4j_connection()
+            db.execute_query("RETURN 1")
+        except Exception as e:
+            neo4j_status = f"error: {str(e)[:100]}"
+        
+        # Test embedding service
+        embedding_status = "loaded"
+        try:
+            service = get_embedding_service()
+            if service._model is None:
+                embedding_status = "not_loaded"
+        except Exception as e:
+            embedding_status = f"error: {str(e)[:100]}"
+        
+        return {
+            "status": "healthy",
+            "services": {
+                "neo4j": neo4j_status,
+                "embedding": embedding_status
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }
 
 @app.get("/state")
 async def get_all_state():

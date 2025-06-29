@@ -6,7 +6,7 @@ A FastAPI backend providing state management and data storage APIs for the EM To
 
 1. Install dependencies with uv (recommended):
 ```bash
-uv pip install -r requirements.txt
+uv sync
 ```
 
 2. Start the development server:
@@ -16,9 +16,9 @@ uv run python main.py
 
 The API will run on `http://localhost:8001`
 
-**Alternative with pip:**
+**Alternative with pip (requires manual dependency management):**
 ```bash
-pip install -r requirements.txt
+pip install fastapi uvicorn pydantic neo4j sentence-transformers torch
 python main.py
 ```
 
@@ -26,10 +26,12 @@ python main.py
 
 ```
 backend/
-├── main.py             # FastAPI application entry point
-├── requirements.txt    # Python dependencies
-├── pyproject.toml     # Project configuration
-└── uv.lock            # UV dependency lock file
+├── main.py               # FastAPI application entry point
+├── database.py           # Neo4j connection and management
+├── embedding_service.py  # Qwen embedding model integration
+├── pyproject.toml       # Project configuration and dependencies
+├── uv.lock              # UV dependency lock file with exact versions
+└── .env.example         # Environment configuration template
 ```
 
 ## API Endpoints
@@ -112,6 +114,18 @@ Key packages and their purposes:
 - `fastapi` - Web framework and API
 - `uvicorn` - ASGI server for development and production
 - `pydantic` - Data validation and serialization
+
+**Adding new dependencies:**
+```bash
+# Add runtime dependencies
+uv add package-name
+
+# Add development dependencies
+uv add --dev pytest black
+
+# Add optional dependencies
+uv add --optional ai openai langchain
+```
 
 ### Data Storage
 Currently uses **in-memory storage** with Python dictionaries:
@@ -220,14 +234,21 @@ OPENAI_API_KEY=your_api_key_here
 ```dockerfile
 FROM python:3.11-slim
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies
+RUN uv sync --frozen --no-cache
 
 COPY . .
 EXPOSE 8001
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
 ```
 
 ### Docker Compose

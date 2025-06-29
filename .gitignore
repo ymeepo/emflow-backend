@@ -147,6 +147,35 @@ instance/
 # UV (Python package manager)
 .uv_cache/
 
+# Machine Learning Models and Data
+models/
+*.bin
+*.safetensors
+*.model
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.onnx
+*.h5
+*.hdf5
+transformers_cache/
+huggingface/
+sentence_transformers/
+
+# Vector databases and embeddings
+embeddings/
+vectors/
+*.index
+*.faiss
+
+# Large data files
+*.parquet
+*.csv.gz
+*.jsonl.gz
+data/
+datasets/
+
 # Claude Code specific
 .claude/
 *.claude.md
