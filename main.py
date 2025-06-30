@@ -1,8 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Dict, Any, Optional
-import json
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -11,10 +8,14 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Import our new services
-from database import init_database, close_database
-from embedding_service import init_embedding_service
-from schema import initialize_em_tools_schema
+# Import infrastructure services
+from infrastructure.neo4j_connection import init_database, close_database
+from infrastructure.qwen_embedding_service import init_embedding_service
+from application.schema import initialize_em_tools_schema
+from application.sample_data import create_comprehensive_sample_data
+
+# Import routers
+from routers import agent
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +42,10 @@ async def lifespan(app: FastAPI):
         # Initialize embedding service (this may take a while on first run)
         init_embedding_service()
         logger.info("Embedding service initialized")
+        
+        # Create sample data if it doesn't exist
+        create_comprehensive_sample_data()
+        logger.info("Sample data initialization completed")
         
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
@@ -69,48 +74,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory state storage
-state_store: Dict[str, Any] = {}
-
-# In-memory funnel data storage
-funnel_data: Dict[str, int] = {}
-
-class StateItem(BaseModel):
-    key: str
-    value: Any
-
-class StateValue(BaseModel):
-    value: Any
-
-class FunnelData(BaseModel):
-    applicants: int
-    hm_review: int
-    hm_interview: int
-    tech_screen: int
-    panel_1: int
-    panel_2: int
-    hired: int
-
-@app.get("/")
-async def root():
-    return {
-        "message": "EM Tools Backend API",
-        "version": "1.0.0",
-        "features": ["State Storage", "Neo4j Knowledge Graph", "Semantic Search"],
-        "endpoints": {
-            "docs": "/docs",
-            "redoc": "/redoc",
-            "health": "/health"
-        }
-    }
-
+# Include routers
+app.include_router(agent.router)
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring."""
     try:
-        from database import get_neo4j_connection
-        from embedding_service import get_embedding_service
+        from infrastructure.neo4j_connection import get_neo4j_connection
+        from infrastructure.qwen_embedding_service import get_embedding_service
         
         # Test Neo4j connection
         neo4j_status = "connected"
@@ -142,62 +114,6 @@ async def health_check():
             "error": str(e)
         }
 
-@app.get("/state")
-async def get_all_state():
-    return state_store
-
-@app.get("/state/{key}")
-async def get_state(key: str):
-    if key not in state_store:
-        raise HTTPException(status_code=404, detail="Key not found")
-    return {"key": key, "value": state_store[key]}
-
-@app.post("/state")
-async def set_state(item: StateItem):
-    state_store[item.key] = item.value
-    return {"message": "State updated", "key": item.key, "value": item.value}
-
-@app.put("/state/{key}")
-async def update_state(key: str, value: StateValue):
-    state_store[key] = value.value
-    return {"message": "State updated", "key": key, "value": value.value}
-
-@app.delete("/state/{key}")
-async def delete_state(key: str):
-    if key not in state_store:
-        raise HTTPException(status_code=404, detail="Key not found")
-    deleted_value = state_store.pop(key)
-    return {"message": "State deleted", "key": key, "value": deleted_value}
-
-@app.delete("/state")
-async def clear_all_state():
-    state_store.clear()
-    return {"message": "All state cleared"}
-
-# Funnel endpoints
-@app.get("/funnel")
-async def get_funnel_data():
-    if not funnel_data:
-        raise HTTPException(status_code=404, detail="No funnel data found")
-    return funnel_data
-
-@app.post("/funnel")
-async def save_funnel_data(data: FunnelData):
-    funnel_data.update({
-        "applicants": data.applicants,
-        "hm_review": data.hm_review,
-        "hm_interview": data.hm_interview,
-        "tech_screen": data.tech_screen,
-        "panel_1": data.panel_1,
-        "panel_2": data.panel_2,
-        "hired": data.hired
-    })
-    return {"message": "Funnel data saved", "data": funnel_data}
-
-@app.delete("/funnel")
-async def clear_funnel_data():
-    funnel_data.clear()
-    return {"message": "Funnel data cleared"}
 
 if __name__ == "__main__":
     import uvicorn

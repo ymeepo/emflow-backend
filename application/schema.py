@@ -2,7 +2,7 @@
 Neo4j schema initialization for EM Tools knowledge graph.
 """
 import logging
-from database import get_neo4j_connection
+from infrastructure.neo4j_connection import get_neo4j_connection
 
 logger = logging.getLogger(__name__)
 

@@ -56,9 +56,12 @@ class Neo4jConnection:
     
     def execute_write_query(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> list:
         """Execute a write Cypher query and return results."""
+        def write_transaction(tx):
+            result = tx.run(query, parameters or {})
+            return [record.data() for record in result]
+        
         with self.get_session() as session:
-            result = session.execute_write(lambda tx: tx.run(query, parameters or {}))
-            return [record.data() for record in result] if result else []
+            return session.execute_write(write_transaction)
     
 # Global connection instance
 neo4j_db = Neo4jConnection()

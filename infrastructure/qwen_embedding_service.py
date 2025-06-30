@@ -1,4 +1,4 @@
-""" Embedding service using Qwen3-Embedding-0.6B model for semantic search. """
+""" Qwen embedding service implementation using Qwen3-Embedding-0.6B model for semantic search. """
 
 import os
 import logging
@@ -8,10 +8,12 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 from functools import lru_cache
 
+from core.embedding_service import EmbeddingService as EmbeddingServiceInterface
+
 logger = logging.getLogger(__name__)
 
 
-class EmbeddingService:
+class QwenEmbeddingService(EmbeddingServiceInterface):
     """Service for generating embeddings using Qwen3-Embedding-0.6B model."""
     
     def __init__(self):
@@ -54,13 +56,13 @@ class EmbeddingService:
         return model.get_sentence_embedding_dimension()
     
     @lru_cache(maxsize=1000)
-    def encode_text(self, text: str) -> np.ndarray:
+    def encode_text(self, text: str) -> List[float]:
         """
         Generate embedding for a single text string.
         Uses LRU cache for frequently requested texts.
         """
         if not text or not text.strip():
-            return np.zeros(self.get_embedding_dimension(), dtype=np.float32)
+            return np.zeros(self.get_embedding_dimension(), dtype=np.float32).tolist()
         
         model = self.get_model()
         embedding = model.encode(
@@ -68,7 +70,7 @@ class EmbeddingService:
             convert_to_numpy=True,
             normalize_embeddings=True
         )
-        return embedding.astype(np.float32)
+        return embedding.astype(np.float32).tolist()
     
     def encode_batch(self, texts: List[str]) -> np.ndarray:
         """Generate embeddings for a batch of texts."""
@@ -90,20 +92,23 @@ class EmbeddingService:
         )
         return embeddings.astype(np.float32)
     
-    def compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+    def compute_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
         """Compute cosine similarity between two embeddings."""
-        if embedding1.size == 0 or embedding2.size == 0:
+        emb1 = np.array(embedding1, dtype=np.float32)
+        emb2 = np.array(embedding2, dtype=np.float32)
+        
+        if emb1.size == 0 or emb2.size == 0:
             return 0.0
         
         # Ensure embeddings are normalized
-        norm1 = np.linalg.norm(embedding1)
-        norm2 = np.linalg.norm(embedding2)
+        norm1 = np.linalg.norm(emb1)
+        norm2 = np.linalg.norm(emb2)
         
         if norm1 == 0 or norm2 == 0:
             return 0.0
         
-        normalized1 = embedding1 / norm1
-        normalized2 = embedding2 / norm2
+        normalized1 = emb1 / norm1
+        normalized2 = emb2 / norm2
         
         similarity = np.dot(normalized1, normalized2)
         return float(similarity)
@@ -189,10 +194,10 @@ class EmbeddingService:
 
 
 # Global embedding service instance
-embedding_service = EmbeddingService()
+embedding_service = QwenEmbeddingService()
 
 
-def get_embedding_service() -> EmbeddingService:
+def get_embedding_service() -> QwenEmbeddingService:
     """Get the global embedding service instance."""
     return embedding_service
 
