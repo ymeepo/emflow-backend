@@ -7,7 +7,7 @@ from infrastructure.neo4j_connection import get_neo4j_connection
 logger = logging.getLogger(__name__)
 
 
-def initialize_em_tools_schema() -> None:
+async def initialize_em_tools_schema() -> None:
     """Initialize Neo4j schema with constraints and indexes for EM Tools."""
     db = get_neo4j_connection()
     
@@ -50,7 +50,7 @@ def initialize_em_tools_schema() -> None:
     
     for query in schema_queries:
         try:
-            db.execute_write_query(query)
+            await db.execute_write_query(query)
             logger.info(f"Schema query executed: {query[:50]}...")
         except Exception as e:
             logger.warning(f"Schema query failed (may already exist): {e}")
@@ -58,7 +58,7 @@ def initialize_em_tools_schema() -> None:
     logger.info("EM Tools schema initialization completed")
 
 
-def create_sample_data() -> None:
+async def create_sample_data() -> None:
     """Create sample engineers and projects for development."""
     db = get_neo4j_connection()
     
@@ -115,7 +115,7 @@ def create_sample_data() -> None:
             e.created_at = datetime(),
             e.updated_at = datetime()
         """
-        db.execute_write_query(query, engineer)
+        await db.execute_write_query(query, engineer)
     
     # Create projects
     for project in projects:
@@ -128,7 +128,7 @@ def create_sample_data() -> None:
             p.created_at = datetime(),
             p.updated_at = datetime()
         """
-        db.execute_write_query(query, project)
+        await db.execute_write_query(query, project)
     
     # Create relationships
     relationships = [
@@ -144,17 +144,17 @@ def create_sample_data() -> None:
         MERGE (e)-[r:""" + relationship + """]->(p)
         SET r.created_at = datetime()
         """
-        db.execute_write_query(query, {"engineer_id": engineer_id, "project_id": project_id})
+        await db.execute_write_query(query, {"engineer_id": engineer_id, "project_id": project_id})
     
     logger.info("Sample data created successfully")
 
 
-def clear_all_data() -> None:
+async def clear_all_data() -> None:
     """Clear all data from the knowledge graph (for development/testing)."""
     db = get_neo4j_connection()
     
     # Delete all nodes and relationships
     query = "MATCH (n) DETACH DELETE n"
-    db.execute_write_query(query)
+    await db.execute_write_query(query)
     
     logger.info("All data cleared from knowledge graph")

@@ -22,14 +22,10 @@ class KnowledgeGraphApplicationService:
         query_embedding = self._embedding_service.encode_text(query)
         return await self._knowledge_repo.search_projects_by_embedding(query_embedding, limit)
     
-    async def get_engineer_relationships(self, engineer_id: str) -> dict:
+    async def get_engineer_relationships(self, engineer_id: str) -> list[dict]:
         """Get all relationships for a specific engineer."""
         return await self._knowledge_repo.get_engineer_relationships(engineer_id)
     
-    async def get_project_team(self, project_id: str) -> list[Engineer]:
-        """Get all engineers working on a specific project."""
-        return await self._knowledge_repo.get_project_team(project_id)
-    
-    async def get_engineer_projects(self, engineer_id: str) -> list[Project]:
-        """Get all projects an engineer is involved with."""
-        return await self._knowledge_repo.get_engineer_projects(engineer_id)
+    async def get_project_relationships(self, project_id: str) -> list[dict]:
+        """Get all relationships for a specific project."""
+        return await self._knowledge_repo.get_project_relationships(project_id)

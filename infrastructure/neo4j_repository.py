@@ -18,7 +18,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
     def __init__(self):
         self.db = get_neo4j_connection()
     
-    def search_engineers_by_embedding(
+    async def search_engineers_by_embedding(
         self, 
         query_embedding: List[float], 
         top_k: int = 5, 
@@ -47,18 +47,21 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         """
         
         try:
-            raw_results = self.db.execute_query(cypher_query, {
-                "query_embedding": query_embedding,
-                "threshold": threshold,
-                "top_k": top_k
-            })
+            raw_results = await self.db.execute_query(
+                cypher_query, 
+                {
+                    "query_embedding": query_embedding,
+                    "threshold": threshold,
+                    "top_k": top_k
+                }
+            )
             return self._convert_to_search_results(raw_results, EntityType.ENGINEER)
         except Exception:
             # Fallback: Get all entities and compute similarity in Python
             logger.warning("GDS not available, using Python similarity computation")
-            return self._fallback_engineer_search(query_embedding, top_k, threshold)
+            return await self._fallback_engineer_search(query_embedding, top_k, threshold)
     
-    def search_projects_by_embedding(
+    async def search_projects_by_embedding(
         self, 
         query_embedding: List[float], 
         top_k: int = 5, 
@@ -85,18 +88,22 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         """
         
         try:
-            raw_results = self.db.execute_query(cypher_query, {
-                "query_embedding": query_embedding,
-                "threshold": threshold,
-                "top_k": top_k
-            })
+            raw_results = await asyncio.to_thread(
+                self.db.execute_query, 
+                cypher_query, 
+                {
+                    "query_embedding": query_embedding,
+                    "threshold": threshold,
+                    "top_k": top_k
+                }
+            )
             return self._convert_to_search_results(raw_results, EntityType.PROJECT)
         except Exception:
             # Fallback: Get all entities and compute similarity in Python
             logger.warning("GDS not available, using Python similarity computation")
-            return self._fallback_project_search(query_embedding, top_k, threshold)
+            return await self._fallback_project_search(query_embedding, top_k, threshold)
     
-    def get_engineer_by_id(self, engineer_id: str) -> Optional[Dict[str, Any]]:
+    async def get_engineer_by_id(self, engineer_id: str) -> Optional[Dict[str, Any]]:
         """Get engineer by ID."""
         query = """
         MATCH (e:Engineer {id: $engineer_id})
@@ -111,10 +118,10 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                e.status as status,
                e.email as email
         """
-        results = self.db.execute_query(query, {"engineer_id": engineer_id})
+        results = await self.db.execute_query(query, {"engineer_id": engineer_id})
         return results[0] if results else None
     
-    def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
+    async def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """Get project by ID."""
         query = """
         MATCH (p:Project {id: $project_id})
@@ -127,10 +134,10 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                p.business_value as business_value,
                p.priority as priority
         """
-        results = self.db.execute_query(query, {"project_id": project_id})
+        results = await self.db.execute_query(query, {"project_id": project_id})
         return results[0] if results else None
     
-    def get_engineer_relationships(self, engineer_id: str) -> List[Dict[str, Any]]:
+    async def get_engineer_relationships(self, engineer_id: str) -> List[Dict[str, Any]]:
         """Get all relationships for an engineer."""
         relationship_queries = {
             "projects": """
@@ -171,14 +178,14 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         all_relationships = []
         for rel_type, query in relationship_queries.items():
             try:
-                results = self.db.execute_query(query, {"entity_id": engineer_id})
+                results = await self.db.execute_query(query, {"entity_id": engineer_id})
                 all_relationships.extend(results)
             except Exception as e:
                 logger.warning(f"Relationship query '{rel_type}' failed: {e}")
         
         return all_relationships
     
-    def get_project_relationships(self, project_id: str) -> List[Dict[str, Any]]:
+    async def get_project_relationships(self, project_id: str) -> List[Dict[str, Any]]:
         """Get all relationships for a project."""
         relationship_queries = {
             "engineers": """
@@ -197,31 +204,31 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         all_relationships = []
         for rel_type, query in relationship_queries.items():
             try:
-                results = self.db.execute_query(query, {"entity_id": project_id})
+                results = await self.db.execute_query(query, {"entity_id": project_id})
                 all_relationships.extend(results)
             except Exception as e:
                 logger.warning(f"Relationship query '{rel_type}' failed: {e}")
         
         return all_relationships
     
-    def get_knowledge_graph_stats(self) -> Dict[str, Any]:
+    async def get_knowledge_graph_stats(self) -> Dict[str, Any]:
         """Get statistics about the knowledge graph."""
         # Node counts
-        node_stats = self.db.execute_query("""
+        node_stats = await self.db.execute_query("""
         MATCH (n)
         RETURN labels(n)[0] as node_type, count(n) as count
         ORDER BY count DESC
         """)
         
         # Relationship counts
-        rel_stats = self.db.execute_query("""
+        rel_stats = await self.db.execute_query("""
         MATCH ()-[r]->()
         RETURN type(r) as relationship_type, count(r) as count
         ORDER BY count DESC
         """)
         
         # Skills distribution
-        skills_stats = self.db.execute_query("""
+        skills_stats = await self.db.execute_query("""
         MATCH (e:Engineer)
         UNWIND e.skills as skill
         RETURN skill, count(*) as engineer_count
@@ -230,7 +237,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         """)
         
         # Active projects
-        active_projects = self.db.execute_query("""
+        active_projects = await self.db.execute_query("""
         MATCH (p:Project)
         WHERE p.status = 'ongoing'
         RETURN count(p) as active_count
@@ -244,7 +251,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
             "active_projects": active_projects[0]["active_count"] if active_projects else 0
         }
     
-    def _fallback_engineer_search(self, query_embedding: List[float], top_k: int, threshold: float) -> List[SemanticSearchResult]:
+    async def _fallback_engineer_search(self, query_embedding: List[float], top_k: int, threshold: float) -> List[SemanticSearchResult]:
         """Fallback method for engineer search when GDS is not available."""
         fallback_query = """
         MATCH (e:Engineer)
@@ -254,10 +261,10 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                e.skills as skills, e.expertise as expertise, e.tenure as tenure,
                e.status as status, e.email as email
         """
-        all_entities = self.db.execute_query(fallback_query)
+        all_entities = await self.db.execute_query(fallback_query)
         return self._compute_similarity_in_python(all_entities, query_embedding, top_k, threshold)
     
-    def _fallback_project_search(self, query_embedding: List[float], top_k: int, threshold: float) -> List[SemanticSearchResult]:
+    async def _fallback_project_search(self, query_embedding: List[float], top_k: int, threshold: float) -> List[SemanticSearchResult]:
         """Fallback method for project search when GDS is not available."""
         fallback_query = """
         MATCH (p:Project)
@@ -266,7 +273,7 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                p.description as description, p.stage as stage, p.status as status,
                p.technologies as technologies, p.business_value as business_value, p.priority as priority
         """
-        all_entities = self.db.execute_query(fallback_query)
+        all_entities = await self.db.execute_query(fallback_query)
         return self._compute_similarity_in_python(all_entities, query_embedding, top_k, threshold)
     
     def _compute_similarity_in_python(self, entities: List[Dict], query_embedding: List[float], top_k: int, threshold: float) -> List[SemanticSearchResult]:

@@ -7,18 +7,18 @@ from infrastructure.qwen_embedding_service import get_embedding_service
 logger = logging.getLogger(__name__)
 
 
-def check_sample_data_exists() -> bool:
+async def check_sample_data_exists() -> bool:
     """Check if sample data already exists in the database."""
     try:
         db = get_neo4j_connection()
         
         # Check for both engineers AND projects to ensure complete sample data
-        engineer_result = db.execute_query("""
+        engineer_result = await db.execute_query("""
         MATCH (e:Engineer {id: 'sarah-chen'})
         RETURN count(e) as count
         """)
         
-        project_result = db.execute_query("""
+        project_result = await db.execute_query("""
         MATCH (p:Project {id: 'chatbot-platform'})
         RETURN count(p) as count
         """)
@@ -41,13 +41,13 @@ def check_sample_data_exists() -> bool:
         return False
 
 
-def create_comprehensive_sample_data() -> None:
+async def create_comprehensive_sample_data() -> None:
     """Create comprehensive sample data with engineers, projects, and relationships."""
     db = get_neo4j_connection()
     embedding_service = get_embedding_service()
     
     # Check if sample data already exists
-    if check_sample_data_exists():
+    if await check_sample_data_exists():
         logger.info("Sample data already exists, skipping creation")
         return
     
@@ -229,8 +229,8 @@ def create_comprehensive_sample_data() -> None:
                 e.updated_at = datetime()
             """
             params = engineer.copy()
-            params['embedding'] = embedding.tolist()
-            db.execute_write_query(query, params)
+            params['embedding'] = embedding
+            await db.execute_write_query(query, params)
             logger.info(f"Created engineer {i+1}/{len(engineers)}: {engineer['name']}")
         except Exception as e:
             logger.error(f"Failed to create engineer {engineer['name']}: {e}")
@@ -258,8 +258,8 @@ def create_comprehensive_sample_data() -> None:
                 p.updated_at = datetime()
             """
             params = project.copy()
-            params['embedding'] = embedding.tolist()
-            db.execute_write_query(query, params)
+            params['embedding'] = embedding
+            await db.execute_write_query(query, params)
             logger.info(f"Created project {i+1}/{len(projects)}: {project['name']}")
         except Exception as e:
             logger.error(f"Failed to create project {project['name']}: {e}")
@@ -280,7 +280,7 @@ def create_comprehensive_sample_data() -> None:
         CREATE (m)-[r:{relationship}]->(e)
         SET r.created_at = datetime()
         """
-        db.execute_write_query(query, {"manager_id": manager_id, "engineer_id": engineer_id})
+        await db.execute_write_query(query, {"manager_id": manager_id, "engineer_id": engineer_id})
     
     # Create project work relationships with roles
     project_assignments = [
@@ -306,7 +306,7 @@ def create_comprehensive_sample_data() -> None:
             r.start_date = date(),
             r.created_at = datetime()
         """
-        db.execute_write_query(query, {
+        await db.execute_write_query(query, {
             "engineer_id": engineer_id, 
             "project_id": project_id, 
             "role": role
@@ -329,7 +329,7 @@ def create_comprehensive_sample_data() -> None:
         SET r.context = $context,
             r.created_at = datetime()
         """
-        db.execute_write_query(query, {
+        await db.execute_write_query(query, {
             "person1_id": person1_id,
             "person2_id": person2_id, 
             "context": context
@@ -343,14 +343,14 @@ def create_comprehensive_sample_data() -> None:
     logger.info("- Embeddings for semantic search capabilities")
 
 
-def get_data_summary() -> dict:
+async def get_data_summary() -> dict:
     """Get a summary of the data in the knowledge graph."""
     db = get_neo4j_connection()
     
     summary = {}
     
     # Count nodes
-    node_counts = db.execute_query("""
+    node_counts = await db.execute_query("""
         MATCH (n)
         RETURN labels(n)[0] as label, count(n) as count
         ORDER BY count DESC
@@ -358,7 +358,7 @@ def get_data_summary() -> dict:
     summary['nodes'] = {record['label']: record['count'] for record in node_counts}
     
     # Count relationships
-    rel_counts = db.execute_query("""
+    rel_counts = await db.execute_query("""
         MATCH ()-[r]->()
         RETURN type(r) as relationship, count(r) as count
         ORDER BY count DESC
@@ -366,7 +366,7 @@ def get_data_summary() -> dict:
     summary['relationships'] = {record['relationship']: record['count'] for record in rel_counts}
     
     # Get sample skills for semantic search testing
-    skills = db.execute_query("""
+    skills = await db.execute_query("""
         MATCH (e:Engineer)
         UNWIND e.skills as skill
         RETURN DISTINCT skill

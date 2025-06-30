@@ -9,7 +9,7 @@ class KnowledgeGraphRepository(ABC):
     """Abstract interface for knowledge graph operations."""
     
     @abstractmethod
-    def search_engineers_by_embedding(
+    async def search_engineers_by_embedding(
         self, 
         query_embedding: List[float], 
         top_k: int = 5, 
@@ -19,7 +19,7 @@ class KnowledgeGraphRepository(ABC):
         pass
     
     @abstractmethod
-    def search_projects_by_embedding(
+    async def search_projects_by_embedding(
         self, 
         query_embedding: List[float], 
         top_k: int = 5, 
@@ -29,26 +29,26 @@ class KnowledgeGraphRepository(ABC):
         pass
     
     @abstractmethod
-    def get_engineer_by_id(self, engineer_id: str) -> Optional[Dict[str, Any]]:
+    async def get_engineer_by_id(self, engineer_id: str) -> Optional[Dict[str, Any]]:
         """Get engineer by ID."""
         pass
     
     @abstractmethod
-    def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
+    async def get_project_by_id(self, project_id: str) -> Optional[Dict[str, Any]]:
         """Get project by ID."""
         pass
     
     @abstractmethod
-    def get_engineer_relationships(self, engineer_id: str) -> List[Dict[str, Any]]:
+    async def get_engineer_relationships(self, engineer_id: str) -> List[Dict[str, Any]]:
         """Get all relationships for an engineer."""
         pass
     
     @abstractmethod
-    def get_project_relationships(self, project_id: str) -> List[Dict[str, Any]]:
+    async def get_project_relationships(self, project_id: str) -> List[Dict[str, Any]]:
         """Get all relationships for a project."""
         pass
     
     @abstractmethod
-    def get_knowledge_graph_stats(self) -> Dict[str, Any]:
+    async def get_knowledge_graph_stats(self) -> Dict[str, Any]:
         """Get statistics about the knowledge graph."""
         pass

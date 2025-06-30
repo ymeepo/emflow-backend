@@ -32,11 +32,11 @@ async def lifespan(app: FastAPI):
     logger.info("Starting EM Tools Backend...")
     try:
         # Initialize database connection
-        init_database()
+        await init_database()
         logger.info("Neo4j database connected")
         
         # Initialize EM Tools schema
-        initialize_em_tools_schema()
+        await initialize_em_tools_schema()
         logger.info("EM Tools schema initialized")
         
         # Initialize embedding service (this may take a while on first run)
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
         logger.info("Embedding service initialized")
         
         # Create sample data if it doesn't exist
-        create_comprehensive_sample_data()
+        await create_comprehensive_sample_data()
         logger.info("Sample data initialization completed")
         
     except Exception as e:
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down EM Tools Backend...")
-    close_database()
+    await close_database()
 
 
 app = FastAPI(
