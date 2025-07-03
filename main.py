@@ -12,7 +12,7 @@ load_dotenv()
 from infrastructure.neo4j_connection import init_database, close_database
 from infrastructure.qwen_embedding_service import init_embedding_service
 from application.schema import initialize_em_tools_schema
-from application.sample_data import create_comprehensive_sample_data
+from container import container
 
 # Import routers
 from routers import agent
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
         logger.info("Embedding service initialized")
         
         # Create sample data if it doesn't exist
-        await create_comprehensive_sample_data()
+        await container.data_seeder_service.create_comprehensive_sample_data()
         logger.info("Sample data initialization completed")
         
     except Exception as e:

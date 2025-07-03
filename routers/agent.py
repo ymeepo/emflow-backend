@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
 import asyncio
+import uuid
 from container import container
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
@@ -21,21 +22,31 @@ async def process_user_prompt(prompt: str, user_id: str):
     Uses the application service to perform real knowledge graph operations.
     """
     
+    # Generate unique session ID for tracking
+    session_id = str(uuid.uuid4())[:8]
+    print(f"🔍 STARTING SESSION {session_id} for prompt: '{prompt}'")
+    
     # Get the agent application service
     agent_service = container.agent_application_service
     
     # Step 1: Parse and understand the prompt
     yield {
         "type": "status",
-        "message": f"🧠 Analyzing prompt: '{prompt[:50]}{'...' if len(prompt) > 50 else ''}'"
+        "message": f"🧠 Analyzing prompt: '{prompt[:50]}{'...' if len(prompt) > 50 else ''}'",
+        "session_id": session_id,
+        "step": 1
     }
+    print(f"📤 SESSION {session_id} - Step 1: Analyzing prompt")
     await asyncio.sleep(0.5)
     
     # Step 2: Query knowledge graph
     yield {
         "type": "status", 
-        "message": "🔍 Searching knowledge graph for relevant engineers and projects..."
+        "message": "🔍 Searching knowledge graph for relevant engineers and projects...",
+        "session_id": session_id,
+        "step": 2
     }
+    print(f"📤 SESSION {session_id} - Step 2: Searching knowledge graph")
     
     try:
         # Use real application service to process the query
@@ -44,12 +55,15 @@ async def process_user_prompt(prompt: str, user_id: str):
         yield {
             "type": "data",
             "message": f"Found {search_results['type']} results",
+            "session_id": session_id,
+            "step": 3,
             "data": {
                 "query_type": search_results['type'],
                 "results_count": len(search_results.get('results', [])) if 'results' in search_results else 
                               len(search_results.get('engineer_results', [])) + len(search_results.get('project_results', []))
             }
         }
+        print(f"📤 SESSION {session_id} - Step 3: Found {search_results['type']} results")
         await asyncio.sleep(0.3)
         
         # Step 3: Present search results
@@ -60,7 +74,10 @@ async def process_user_prompt(prompt: str, user_id: str):
         await asyncio.sleep(0.8)
         
         # Format results for display
-        if search_results['type'] == 'engineer_search':
+        if search_results['type'] == 'agent_response':
+            # For agent responses, just display the response
+            top_matches = {"agent_response": search_results['response']}
+        elif search_results['type'] == 'engineer_search':
             top_matches = [
                 {
                     "name": result.name,
@@ -116,6 +133,8 @@ async def process_user_prompt(prompt: str, user_id: str):
         yield {
             "type": "result",
             "message": "Analysis complete! Here are the key findings:",
+            "session_id": session_id,
+            "step": 5,
             "data": {
                 "summary": f"Based on your query '{prompt}', I found relevant {search_results['type'].replace('_', ' ')} results.",
                 "search_results": search_results,
@@ -123,12 +142,17 @@ async def process_user_prompt(prompt: str, user_id: str):
                 "processing_time": "2.8 seconds"
             }
         }
+        print(f"📤 SESSION {session_id} - Step 5: Final response sent")
         
     except Exception as e:
         yield {
             "type": "error",
-            "message": f"Error during processing: {str(e)}"
+            "message": f"Error during processing: {str(e)}",
+            "session_id": session_id
         }
+        print(f"❌ SESSION {session_id} - Error: {str(e)}")
+    
+    print(f"🏁 SESSION {session_id} - COMPLETED")
 
 
 @router.post("/query")
@@ -140,25 +164,41 @@ async def agent_query(request: UserPrompt):
     """
     
     async def generate_stream():
+        stream_id = str(uuid.uuid4())[:8]
+        print(f"🌊 STARTING STREAM {stream_id} for user: {request.user_id}")
         try:
             # Send initial acknowledgment
-            yield f"data: {json.dumps({'type': 'start', 'message': 'Processing your request...', 'user_id': request.user_id})}\n\n"
+            start_msg = {'type': 'start', 'message': 'Processing your request...', 'user_id': request.user_id, 'stream_id': stream_id}
+            print(f"📡 STREAM {stream_id} - Sending start message")
+            yield f"data: {json.dumps(start_msg)}\n\n"
             
             # Process the prompt and yield intermediate results
+            response_count = 0
             async for response in process_user_prompt(request.prompt, request.user_id):
+                response_count += 1
+                # Add stream tracking
+                response['stream_id'] = stream_id
+                response['response_number'] = response_count
+                print(f"📡 STREAM {stream_id} - Sending response #{response_count}: {response.get('type', 'unknown')}")
                 # Format as Server-Sent Events
                 yield f"data: {json.dumps(response)}\n\n"
                 
             # Send completion signal
-            yield f"data: {json.dumps({'type': 'complete', 'message': 'Processing finished'})}\n\n"
+            complete_msg = {'type': 'complete', 'message': 'Processing finished', 'stream_id': stream_id, 'total_responses': response_count}
+            print(f"📡 STREAM {stream_id} - Sending completion (total responses: {response_count})")
+            yield f"data: {json.dumps(complete_msg)}\n\n"
             
         except Exception as e:
             # Send error if something goes wrong
             error_response = {
                 "type": "error",
-                "message": f"Error processing request: {str(e)}"
+                "message": f"Error processing request: {str(e)}",
+                "stream_id": stream_id
             }
+            print(f"❌ STREAM {stream_id} - Error: {str(e)}")
             yield f"data: {json.dumps(error_response)}\n\n"
+        
+        print(f"🏁 STREAM {stream_id} - STREAM ENDED")
     
     return StreamingResponse(
         generate_stream(),

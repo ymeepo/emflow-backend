@@ -6,6 +6,7 @@ from infrastructure.neo4j_repository import Neo4jKnowledgeGraphRepository
 from infrastructure.qwen_embedding_service import QwenEmbeddingService
 from application.knowledge_graph_service import KnowledgeGraphApplicationService
 from application.agent_service import AgentApplicationService
+from application.data_seeder import DataSeederService
 
 
 class Container:
@@ -46,6 +47,16 @@ class Container:
                 knowledge_service=self.knowledge_graph_application_service
             )
         return self._instances['agent_application_service']
+    
+    @property
+    def data_seeder_service(self) -> DataSeederService:
+        """Get data seeder service instance."""
+        if 'data_seeder_service' not in self._instances:
+            self._instances['data_seeder_service'] = DataSeederService(
+                knowledge_repo=self.knowledge_graph_repo,
+                embedding_service=self.embedding_service
+            )
+        return self._instances['data_seeder_service']
 
 
 # Global container instance

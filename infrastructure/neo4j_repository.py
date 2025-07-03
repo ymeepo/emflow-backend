@@ -22,9 +22,11 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
         self, 
         query_embedding: List[float], 
         top_k: int = 5, 
-        threshold: float = 0.7
+        threshold: float = 0.5
     ) -> List[SemanticSearchResult]:
         """Search engineers using semantic similarity."""
+        logger.info(f"EMBEDDING SEARCH: threshold={threshold}, top_k={top_k}, embedding_length={len(query_embedding)}")
+        
         cypher_query = """
         MATCH (e:Engineer)
         WHERE e.embedding IS NOT NULL
@@ -55,17 +57,21 @@ class Neo4jKnowledgeGraphRepository(KnowledgeGraphRepository):
                     "top_k": top_k
                 }
             )
+            logger.info(f"CYPHER RESULTS: {len(raw_results)} raw results from database")
+            for result in raw_results:
+                logger.info(f"DB Result: {result['name']} - similarity: {result['similarity']:.3f} - skills: {result['skills']}")
+            
             return self._convert_to_search_results(raw_results, EntityType.ENGINEER)
-        except Exception:
+        except Exception as e:
             # Fallback: Get all entities and compute similarity in Python
-            logger.warning("GDS not available, using Python similarity computation")
+            logger.warning(f"GDS not available ({e}), using Python similarity computation")
             return await self._fallback_engineer_search(query_embedding, top_k, threshold)
     
     async def search_projects_by_embedding(
         self, 
         query_embedding: List[float], 
         top_k: int = 5, 
-        threshold: float = 0.7
+        threshold: float = 0.5
     ) -> List[SemanticSearchResult]:
         """Search projects using semantic similarity."""
         cypher_query = """
